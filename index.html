@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>视频截帧工具</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <aside id="floatingSidebar" class="floating-sidebar">
+    <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-expanded="true">收起列表</button>
+    <div class="floating-sidebar-inner">
+      <div class="sidebar-head">
+        <div class="sidebar-head-row">
+          <h2>视频列表</h2>
+          <div class="sidebar-head-actions">
+            <button id="selectAllButton" class="sidebar-batch-button" type="button" disabled>全选</button>
+            <button id="invertSelectButton" class="sidebar-batch-button" type="button" disabled>反选</button>
+            <button id="batchDeleteButton" class="sidebar-batch-button" type="button" disabled>删除选中</button>
+            <button id="sidebarAddButton" class="sidebar-add-button" type="button" aria-label="导入视频">+</button>
+          </div>
+        </div>
+        <span id="libraryMeta" class="meta-text">未导入视频</span>
+      </div>
+      <div id="videoList" class="video-list empty">
+        <p class="empty-state">导入后会显示在这里，点击即可切换视频。</p>
+      </div>
+    </div>
+  </aside>
+
+  <main class="app-shell with-floating-sidebar">
+    <section class="hero compact-hero">
+      <div>
+        <p class="eyebrow">Local Video Frame Extractor</p>
+        <h1>多视频导入，标记帧后统一导出</h1>
+        <p class="hero-copy">
+          支持一次导入多个视频，左侧悬浮列表切换当前视频，在时间轴任意位置打帧标记，最后统一导出已标记图片。
+        </p>
+      </div>
+      <div class="hero-actions">
+        <a class="ghost-link" href="./image-blur.html">图片模糊页</a>
+        <button id="pickVideoButton" class="primary-button" type="button">选择视频</button>
+      </div>
+    </section>
+
+    <section class="page-tabs">
+      <a class="page-tab active" href="./index.html">视频截帧</a>
+      <a class="page-tab" href="./image-blur.html">图片局部模糊</a>
+    </section>
+
+    <section id="dropZone" class="drop-zone compact-drop-zone" tabindex="0" aria-label="拖拽视频到这里">
+      <input id="videoInput" type="file" accept="video/*" multiple hidden>
+      <p class="drop-title">拖拽多个视频到此处</p>
+      <p class="drop-subtitle">或点击“选择视频”批量导入本地文件</p>
+      <p class="drop-hint">视频列表已移到网页最左侧，可收起也可展开</p>
+    </section>
+
+    <section id="notice" class="notice hidden" aria-live="polite"></section>
+
+    <section class="workspace video-workspace compact-workspace">
+      <div class="workspace-main">
+        <div class="panel player-panel compact-panel">
+          <div class="panel-head">
+            <h2>视频预览</h2>
+            <span id="fileMeta" class="meta-text">未选择视频</span>
+          </div>
+
+          <div id="videoWrap" class="video-wrap">
+            <video id="video" controls playsinline preload="metadata"></video>
+          </div>
+        </div>
+      </div>
+
+      <div class="workspace-side">
+        <div class="panel markers-panel compact-panel">
+          <div class="panel-head">
+            <h2>帧标记</h2>
+            <span id="markerMeta" class="meta-text">当前无标记</span>
+          </div>
+          <div class="controls-block marker-controls">
+            <div class="timeline-wrap embedded-timeline">
+              <label for="timeline">时间轴</label>
+              <input id="timeline" type="range" min="0" max="0" value="0" step="0.01" disabled>
+              <div class="time-row">
+                <span id="currentTimeLabel">00:00.00</span>
+                <span id="durationLabel">00:00.00</span>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                输出格式
+                <select id="formatSelect">
+                  <option value="png">PNG</option>
+                  <option value="jpg">JPG</option>
+                </select>
+              </label>
+
+              <label>
+                文件名前缀
+                <input id="prefixInput" type="text" value="frame">
+              </label>
+            </div>
+
+            <div class="button-row">
+              <button id="addMarkerButton" type="button" class="secondary-button" disabled>添加帧标记</button>
+              <button id="exportMarkedButton" type="button" class="primary-button" disabled>导出已标记帧</button>
+              <button id="clearMarkersButton" type="button" class="secondary-button" disabled>清空标记</button>
+            </div>
+
+            <p class="helper-text">
+              导出时会优先询问目标文件夹；如果浏览器不支持文件夹选择，则退回普通多文件下载。
+            </p>
+          </div>
+          <div id="markerList" class="marker-list empty">
+            <p class="empty-state">在时间轴定位后点击“添加帧标记”，这里会列出待导出的所有时间点。</p>
+          </div>
+        </div>
+
+        <div class="panel frame-panel compact-panel">
+          <div class="panel-head">
+            <h2>当前帧预览</h2>
+            <div class="panel-head-actions">
+              <button id="sendToMaskButton" class="mini-tool-button" type="button" disabled>发送到蒙版</button>
+              <span id="frameInfo" class="meta-text">尚未截帧</span>
+            </div>
+          </div>
+
+          <div id="canvasWrap" class="canvas-wrap">
+            <canvas id="frameCanvas" width="1280" height="720" aria-label="当前帧画布"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="./media-store.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
