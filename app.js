@@ -31,6 +31,8 @@ const elements = {
   addMarkerButton: document.getElementById("addMarkerButton"),
   exportMarkedButton: document.getElementById("exportMarkedButton"),
   clearMarkersButton: document.getElementById("clearMarkersButton"),
+  markerSelectAllButton: document.getElementById("markerSelectAllButton"),
+  markerInvertSelectButton: document.getElementById("markerInvertSelectButton"),
   markerList: document.getElementById("markerList"),
   markerMeta: document.getElementById("markerMeta"),
   canvasWrap: document.getElementById("canvasWrap"),
@@ -45,11 +47,31 @@ function getCurrentEntry() {
   return state.videos.find((entry) => entry.id === state.currentVideoId) || null;
 }
 
+function ensureMarkerSelection(entry) {
+  if (!entry) {
+    return [];
+  }
+
+  if (!Array.isArray(entry.selectedMarkerIds)) {
+    entry.selectedMarkerIds = [];
+  }
+
+  const markerIds = new Set(entry.markers.map((marker) => marker.id));
+  entry.selectedMarkerIds = entry.selectedMarkerIds.filter((id) => markerIds.has(id));
+  return entry.selectedMarkerIds;
+}
+
 function syncBatchDeleteButton() {
   const hasVideos = Boolean(state.videos.length);
   elements.selectAllButton.disabled = !hasVideos;
   elements.invertSelectButton.disabled = !hasVideos;
   elements.batchDeleteButton.disabled = !state.selectedVideoIds.length;
+}
+
+function syncMarkerSelectionButtons(entry = getCurrentEntry()) {
+  const hasMarkers = Boolean(entry && entry.markers.length);
+  elements.markerSelectAllButton.disabled = !hasMarkers;
+  elements.markerInvertSelectButton.disabled = !hasMarkers;
 }
 
 async function persistVideoState() {
@@ -68,6 +90,7 @@ async function persistVideoState() {
 
   await MediaStore.clearVideos();
   for (const entry of state.videos) {
+    ensureMarkerSelection(entry);
     await MediaStore.putVideo({
       id: entry.id,
       fileName: entry.file.name,
@@ -76,6 +99,7 @@ async function persistVideoState() {
       lastModified: entry.file.lastModified,
       blob: entry.file,
       markers: entry.markers,
+      selectedMarkerIds: entry.selectedMarkerIds,
       selected: currentEntry ? currentEntry.id === entry.id : false,
     });
   }
@@ -320,18 +344,24 @@ function renderMarkerList() {
     elements.markerMeta.textContent = "当前无标记";
     elements.markerList.className = "marker-list empty";
     elements.markerList.innerHTML = '<p class="empty-state">在时间轴定位后点击“添加帧标记”，这里会列出待导出的所有时间点。</p>';
+    syncMarkerSelectionButtons(null);
     toggleActions(Boolean(entry));
     renderVideoList();
     return;
   }
 
-  elements.markerMeta.textContent = `共 ${entry.markers.length} 个标记`;
+  const selectedMarkerIds = ensureMarkerSelection(entry);
+  elements.markerMeta.textContent = selectedMarkerIds.length
+    ? `共 ${entry.markers.length} 个标记 | 已选 ${selectedMarkerIds.length} 个`
+    : `共 ${entry.markers.length} 个标记`;
   elements.markerList.className = "marker-list";
   elements.markerList.innerHTML = entry.markers.map((marker, index) => `
     <div class="marker-item">
+      <label class="marker-check">
+        <input type="checkbox" data-select-marker-id="${marker.id}" ${selectedMarkerIds.includes(marker.id) ? "checked" : ""}>
+      </label>
       <div class="marker-main">
         <button class="marker-jump" type="button" data-marker-time="${marker.time}">${index + 1}. ${formatTime(marker.time)}</button>
-        <input class="marker-name-input" type="text" value="${marker.name || ""}" data-marker-name-id="${marker.id}" placeholder="导出文件名">
       </div>
       <button class="marker-delete" type="button" data-marker-id="${marker.id}">删除</button>
     </div>
@@ -350,12 +380,23 @@ function renderMarkerList() {
     button.addEventListener("click", () => removeMarker(button.dataset.markerId));
   });
 
-  elements.markerList.querySelectorAll("[data-marker-name-id]").forEach((input) => {
-    input.addEventListener("input", () => {
-      updateMarkerName(input.dataset.markerNameId, input.value);
+  elements.markerList.querySelectorAll("[data-select-marker-id]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const markerIds = ensureMarkerSelection(entry);
+      const { selectMarkerId } = checkbox.dataset;
+      if (checkbox.checked) {
+        if (!markerIds.includes(selectMarkerId)) {
+          markerIds.push(selectMarkerId);
+        }
+      } else {
+        entry.selectedMarkerIds = markerIds.filter((id) => id !== selectMarkerId);
+      }
+      renderMarkerList();
+      void persistVideoState();
     });
   });
 
+  syncMarkerSelectionButtons(entry);
   toggleActions(Boolean(entry));
   renderVideoList();
 }
@@ -366,7 +407,7 @@ function resetPlayerState() {
   elements.currentTimeLabel.textContent = "00:00.00";
   elements.durationLabel.textContent = "00:00.00";
   elements.fileMeta.textContent = "未选择视频";
-  elements.frameInfo.textContent = "尚未截帧";
+  elements.frameInfo.textContent = "灏氭湭鎴抚";
   toggleActions(false);
 }
 
@@ -490,6 +531,31 @@ function invertSelectedVideos() {
   void persistVideoState();
 }
 
+function selectAllMarkers() {
+  const entry = getCurrentEntry();
+  if (!entry || !entry.markers.length) {
+    return;
+  }
+
+  entry.selectedMarkerIds = entry.markers.map((marker) => marker.id);
+  renderMarkerList();
+  void persistVideoState();
+}
+
+function invertSelectedMarkers() {
+  const entry = getCurrentEntry();
+  if (!entry || !entry.markers.length) {
+    return;
+  }
+
+  const selectedIds = new Set(ensureMarkerSelection(entry));
+  entry.selectedMarkerIds = entry.markers
+    .map((marker) => marker.id)
+    .filter((id) => !selectedIds.has(id));
+  renderMarkerList();
+  void persistVideoState();
+}
+
 async function addVideos(files) {
   const validFiles = Array.from(files).filter((file) => file.type.startsWith("video/"));
   if (!validFiles.length) {
@@ -511,6 +577,7 @@ async function addVideos(files) {
       file,
       objectUrl: URL.createObjectURL(file),
       markers: [],
+      selectedMarkerIds: [],
     });
     addedCount += 1;
   }
@@ -547,7 +614,6 @@ function addMarker() {
   entry.markers.push({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     time: roundedTime,
-    name: "",
   });
   entry.markers.sort((a, b) => a.time - b.time);
   renderMarkerList();
@@ -555,19 +621,12 @@ function addMarker() {
   showNotice(`已添加帧标记：${formatTime(roundedTime)}`);
 }
 
-function updateMarkerName(markerId, value) {
-  const entry = getCurrentEntry();
-  if (!entry) return;
-  const marker = entry.markers.find((item) => item.id === markerId);
-  if (!marker) return;
-  marker.name = value;
-  void persistVideoState();
-}
 
 function removeMarker(markerId) {
   const entry = getCurrentEntry();
   if (!entry) return;
   entry.markers = entry.markers.filter((marker) => marker.id !== markerId);
+  entry.selectedMarkerIds = ensureMarkerSelection(entry).filter((id) => id !== markerId);
   renderMarkerList();
   void persistVideoState();
   showNotice("已删除标记。");
@@ -577,6 +636,7 @@ function clearMarkers() {
   const entry = getCurrentEntry();
   if (!entry) return;
   entry.markers = [];
+  entry.selectedMarkerIds = [];
   renderMarkerList();
   void persistVideoState();
   showNotice("当前视频的标记已清空。");
@@ -626,10 +686,7 @@ async function exportMarkedFrames() {
       drawCurrentFrame();
       const blob = await canvasToBlob(elements.frameCanvas, mime, quality);
       const timestamp = marker.time.toFixed(2).replace(".", "_");
-      const customName = sanitizePrefix(marker.name || "");
-      const filename = marker.name && marker.name.trim()
-        ? `${customName}.${extension}`
-        : `${prefix}-${String(index + 1).padStart(3, "0")}-${timestamp}.${extension}`;
+      const filename = `${prefix}-${String(index + 1).padStart(3, "0")}-${timestamp}.${extension}`;
 
       if (directoryHandle) {
         await writeBlobToFolder(directoryHandle, filename, blob);
@@ -714,6 +771,8 @@ function bindEvents() {
   elements.addMarkerButton.addEventListener("click", addMarker);
   elements.exportMarkedButton.addEventListener("click", exportMarkedFrames);
   elements.clearMarkersButton.addEventListener("click", clearMarkers);
+  elements.markerSelectAllButton.addEventListener("click", selectAllMarkers);
+  elements.markerInvertSelectButton.addEventListener("click", invertSelectedMarkers);
   elements.sendToMaskButton.addEventListener("click", () => {
     void sendFrameToMaskPage();
   });
@@ -783,6 +842,7 @@ async function restoreVideoState() {
           file,
           objectUrl: URL.createObjectURL(file),
           markers: Array.isArray(entry.markers) ? entry.markers : [],
+          selectedMarkerIds: Array.isArray(entry.selectedMarkerIds) ? entry.selectedMarkerIds : [],
         };
       });
 

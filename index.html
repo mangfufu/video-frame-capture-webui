@@ -34,11 +34,11 @@
         <p class="eyebrow">Local Video Frame Extractor</p>
         <h1>多视频导入，标记帧后统一导出</h1>
         <p class="hero-copy">
-          支持一次导入多个视频，左侧悬浮列表切换当前视频，在时间轴任意位置打帧标记，最后统一导出已标记图片。
+          支持一次导入多个视频，在左侧悬浮列表切换当前视频，在时间轴任意位置打帧标记，最后统一导出已标记图片。
         </p>
       </div>
       <div class="hero-actions">
-        <a class="ghost-link" href="./image-blur.html">图片模糊页</a>
+        <a class="ghost-link" href="./image-blur.html">图片局部模糊</a>
         <button id="pickVideoButton" class="primary-button" type="button">选择视频</button>
       </div>
     </section>
@@ -75,7 +75,11 @@
         <div class="panel markers-panel compact-panel">
           <div class="panel-head">
             <h2>帧标记</h2>
-            <span id="markerMeta" class="meta-text">当前无标记</span>
+            <div class="panel-head-actions">
+              <button id="markerSelectAllButton" class="mini-tool-button" type="button" disabled>全选</button>
+              <button id="markerInvertSelectButton" class="mini-tool-button" type="button" disabled>反选</button>
+              <span id="markerMeta" class="meta-text">当前无标记</span>
+            </div>
           </div>
           <div class="controls-block marker-controls">
             <div class="timeline-wrap embedded-timeline">
